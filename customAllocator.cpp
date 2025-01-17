@@ -7,6 +7,11 @@
 #include <string.h>
 //#include <malloc.h>
 
-void* customMalloc(size_t size){
+using namespace std;
 
+void* customMalloc(size_t size){
+    if(size <= 0){
+        cerr << "<malloc error>: passed nonpositive size" << endl;
+        return nullptr;
+    }
 }
