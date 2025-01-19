@@ -70,3 +70,25 @@ void* customMalloc(size_t size) {
 
     return (new_block + 1);     // Pointer to the memory after new_block
 }
+
+
+void customFree(void* ptr) {
+    if (!ptr) {
+        cerr << "<free error>: passed null pointer" << endl;
+        return;
+    }
+
+    auto *blockToFree = static_cast<Block *>(ptr - 1);
+    blockToFree->free = true;
+
+    Block* current = blockList;
+    while (current) {
+        if (current->free && current->next && current->next->free) {
+            current->size += sizeof(Block) + current->next->size;
+            current->next = current->next->next;
+        } else {
+            current = current->next;
+        }
+    }
+
+}
