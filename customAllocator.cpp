@@ -78,17 +78,22 @@ void customFree(void* ptr) {
         return;
     }
 
+    // Pointer to the information block
     auto *blockToFree = static_cast<Block *>(ptr - 1);
     blockToFree->free = true;
 
-    Block* current = blockList;
-    while (current) {
-        if (current->free && current->next && current->next->free) {
-            current->size += sizeof(Block) + current->next->size;
-            current->next = current->next->next;
-        } else {
-            current = current->next;
+    if (!blockToFree->next) {   // If it's the last block in the list
+        sbrk(-1 * (sizeof(Block) + blockToFree->size));
+    }
+    else {      // If the freed memory is the center of the list
+        Block* current = blockList;
+        while (current) {
+            if (current->free && current->next && current->next->free) {
+                current->size += sizeof(Block) + current->next->size;
+                current->next = current->next->next;
+            } else {
+                current = current->next;
+            }
         }
     }
-
 }
