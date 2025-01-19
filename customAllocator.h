@@ -1,5 +1,5 @@
-#ifndef __CUSTOM_ALLOCATOR__
-#define __CUSTOM_ALLOCATOR__
+#ifndef CUSTOM_ALLOCATOR_
+#define CUSTOM_ALLOCATOR_
 
 /*=============================================================================
 * do no edit lines below!
@@ -46,4 +46,4 @@ typedef struct Block
 } Block;
 extern Block* blockList;
 
-#endif // CUSTOM_ALLOCATOR
+#endif // CUSTOM_ALLOCATOR_
