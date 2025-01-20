@@ -102,17 +102,61 @@ void customFree(void* ptr) {
     }
 }
 
-
+// Allocating 'nmemb' units of memory in the size of 'size'
 void* customCalloc(size_t nmemb, size_t size) {
     if (nmemb <= 0 || size <= 0) {
         cerr << "<calloc error>: passed nonpositive value" << endl;
         return nullptr;
     }
+
     size_t total_size = nmemb * size;
     void *ptr = customMalloc(total_size);
     if (!ptr) {
         return nullptr;
     }
-    memset(ptr, 0, total_size);
+    memset(ptr, 0, total_size);     // Fill the new memory with 0
     return ptr;
+}
+
+void* customRealloc(void* ptr, size_t size) {
+    if (!ptr) {
+        return customMalloc(size);
+    }
+
+    // Size is 0: free
+    if (size == 0) {
+        customFree(ptr);
+        return nullptr;
+    }
+
+    auto *block = (Block *)(ptr - 1);
+
+    // If the requested memory is at the same size of the old memory: do nothing
+    if (block->size == size) {
+        return ptr;
+    }
+
+    // If new size is bigger: replace with a bigger size pointer
+    if (block->size < size) {
+        // * * * we should copy ptr content to temp, free ptr, and search for memory
+        //at the requested size * * * //
+        void *new_ptr = customMalloc(size);
+        if (!new_ptr) {
+            return nullptr;
+        }
+        memcpy(new_ptr, ptr, block->size);
+        customFree(ptr);
+        return new_ptr;
+    }
+
+    // If new size is smaller: replace with smaller size pointer
+    if (block->size > size) {
+        void *new_ptr = customMalloc(size);
+        if (!new_ptr) {
+            return nullptr;
+        }
+        memcpy(new_ptr, ptr, size);
+        customFree(ptr);
+        return new_ptr;
+    }
 }
