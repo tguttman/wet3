@@ -6,8 +6,11 @@
 #include <iostream>
 #include "customAllocator.h"
 
+#include <string.h>
+
 using namespace std;
 
+// Finds free memory in the block list
 Block *findFreeMemory(Block **last, size_t size) {
     Block *current = blockList;
     while (current) {
@@ -21,6 +24,7 @@ Block *findFreeMemory(Block **last, size_t size) {
     return nullptr;
 }
 
+// Adds memory in the end of the block list
 Block *moreMemory(Block *last, size_t size) {
     Block *new_block = sbrk(0);
     void *requsted_memory = sbrk(size + sizeof(Block));
@@ -71,7 +75,7 @@ void* customMalloc(size_t size) {
     return (new_block + 1);     // Pointer to the memory after new_block
 }
 
-
+// Frees memory
 void customFree(void* ptr) {
     if (!ptr) {
         cerr << "<free error>: passed null pointer" << endl;
@@ -96,4 +100,19 @@ void customFree(void* ptr) {
             }
         }
     }
+}
+
+
+void* customCalloc(size_t nmemb, size_t size) {
+    if (nmemb <= 0 || size <= 0) {
+        cerr << "<calloc error>: passed nonpositive value" << endl;
+        return nullptr;
+    }
+    size_t total_size = nmemb * size;
+    void *ptr = customMalloc(total_size);
+    if (!ptr) {
+        return nullptr;
+    }
+    memset(ptr, 0, total_size);
+    return ptr;
 }
