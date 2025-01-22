@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <iostream>
 #include "customAllocator.h"
-
 #include <string.h>
 
 using namespace std;
@@ -20,7 +19,6 @@ Block *findFreeMemory(Block **last, size_t size) {
         *last = current;
         current = current->next;
     }
-
     return nullptr;
 }
 
@@ -71,7 +69,6 @@ void* customMalloc(size_t size) {
             new_block->free = false;
         }
     }
-
     return (new_block + 1);     // Pointer to the memory after new_block
 }
 
@@ -119,7 +116,9 @@ void* customCalloc(size_t nmemb, size_t size) {
 }
 
 void* customRealloc(void* ptr, size_t size) {
+    // Ptr is null: malloc
     if (!ptr) {
+        if (size == 0) return nullptr;
         return customMalloc(size);
     }
 
@@ -136,7 +135,21 @@ void* customRealloc(void* ptr, size_t size) {
         return ptr;
     }
 
-    // If new size is bigger: replace with a bigger size pointer
+    // Temporary memory to hold ptr content
+    void *temp = customMalloc(size);
+    memcpy(temp, ptr, size);
+
+    customFree(ptr);    // Freeing ptr so customMalloc will see it as empty memory
+    void *new_ptr = customMalloc(size);
+    if (!new_ptr) {
+        return nullptr;
+    }
+    memcpy(new_ptr, temp, size);
+    customFree(temp);
+    return new_ptr;
+
+    /*
+    // If new size is bigger: replace with a bigger size memory
     if (block->size < size) {
         // * * * we should copy ptr content to temp, free ptr, and search for memory
         //at the requested size * * * //
@@ -149,14 +162,15 @@ void* customRealloc(void* ptr, size_t size) {
         return new_ptr;
     }
 
-    // If new size is smaller: replace with smaller size pointer
+    // If new size is smaller: replace with smaller size memory
     if (block->size > size) {
+        customFree(ptr);    // Freeing ptr so customMalloc will see it as empty memory
         void *new_ptr = customMalloc(size);
         if (!new_ptr) {
             return nullptr;
         }
-        memcpy(new_ptr, ptr, size);
-        customFree(ptr);
+        memcpy(new_ptr, temp, size);
+        customFree(temp);
         return new_ptr;
-    }
+    }*/
 }
