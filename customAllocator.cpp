@@ -4,11 +4,12 @@
 
 #include <stdio.h>
 #include <iostream>
+#include <unistd.h>
 #include "customAllocator.h"
 #include <string.h>
 
 using namespace std;
-
+Block* blockList;
 // Finds free memory in the block list
 Block *findFreeMemory(Block **last, size_t size) {
     Block *current = blockList;
@@ -24,7 +25,7 @@ Block *findFreeMemory(Block **last, size_t size) {
 
 // Adds memory in the end of the block list
 Block *moreMemory(Block *last, size_t size) {
-    Block *new_block = sbrk(0);
+    Block *new_block = static_cast<Block*>(sbrk(0));
     void *requsted_memory = sbrk(size + sizeof(Block));
     if (requsted_memory == (void *)-1) {
         return nullptr;
@@ -80,7 +81,7 @@ void customFree(void* ptr) {
     }
 
     // Pointer to the information block
-    auto *blockToFree = static_cast<Block *>(ptr - 1);
+    auto *blockToFree = static_cast<Block *>(ptr) - 1;
     blockToFree->free = true;
 
     if (!blockToFree->next) {   // If it's the last block in the list
@@ -128,7 +129,7 @@ void* customRealloc(void* ptr, size_t size) {
         return nullptr;
     }
 
-    auto *block = (Block *)(ptr - 1);
+    auto *block = (Block *)(ptr) - 1;
 
     // If the requested memory is at the same size of the old memory: do nothing
     if (block->size == size) {
