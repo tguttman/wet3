@@ -123,7 +123,7 @@ void* customCalloc(size_t nmemb, size_t size) {
         return nullptr;
     }
 
-    size_t total_size = nmemb * size;
+    const size_t total_size = nmemb * size;
     void *ptr = customMalloc(total_size);
     if (!ptr) {
         return nullptr;

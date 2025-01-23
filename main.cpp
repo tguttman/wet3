@@ -5,13 +5,14 @@
 #include "customAllocator.h"
 
 int main() {
-  char *arr = (char *)customMalloc(sizeof(char));
+  /*char *arr = (char *)customMalloc(15);
   *arr = 'a';
-  char *arr2 = (char *)customCalloc(3 , sizeof(char));
-  arr2[0] = 'b';
-  arr2[1] = 'c';
-  arr2[2] = 'd';
-  customFree(arr);
+  customFree(arr);*/
+  int *arr2 = (int *)customCalloc(3 , 4);
+  arr2[0] = 0;
+  arr2[1] = 1;
+  arr2[2] = 2;
+  arr2 = (int *)customRealloc(arr2, 8);
   customFree(arr2);
   return 0;
 }
