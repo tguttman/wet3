@@ -28,8 +28,24 @@ Block *moreMemory(Block *last, size_t size) {
     Block *new_block = static_cast<Block*>(sbrk(0));
     void *requsted_memory = sbrk(size + sizeof(Block));
     if (requsted_memory == (void *)-1) {
+        if (errno == ENOMEM) {
+            Block* current = blockList;
+            Block *next = current->next;
+            while (current) {
+                customFree(current + 1);
+                current = next;
+                next = current->next;
+            }
+            cerr << "<sbrk/brk error>: out of memory" << endl;
+            exit(1);
+        } /*else if (errno == EINVAL) {
+            printf("Error: Invalid increment value (EINVAL)\n");
+        } else {
+            printf("Error: Unknown error occurred (%s)\n", strerror(errno));
+        }*/
         return nullptr;
     }
+
     if (last) {
         last->next = new_block;
     }
