@@ -5,5 +5,8 @@
 #include "customAllocator.h"
 
 int main() {
+  char *arr = (char *)customMalloc(sizeof(char));
+  *arr = 'a';
+  customFree(arr);
   return 0;
 }

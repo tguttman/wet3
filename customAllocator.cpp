@@ -126,7 +126,7 @@ void* customRealloc(void* ptr, size_t size) {
     // Size is 0: free
     if (size == 0) {
         customFree(ptr);
-        return nullptr;
+        return ptr;     // Weird but that's what they asked
     }
 
     auto *block = (Block *)(ptr) - 1;
