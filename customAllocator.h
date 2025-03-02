@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <errno.h>
 
+using namespace std;
+
 void* customMalloc(size_t size);
 void  customFree(void* ptr);
 void* customCalloc(size_t nmemb, size_t size);
@@ -24,7 +26,7 @@ void* customRealloc(void* ptr, size_t size);
 /*=============================================================================
 * if writing bonus - uncomment lines below
 =============================================================================*/
-#ifndef __BONUS__
+/*#ifndef __BONUS__
 #define __BONUS__
 #endif
 void* customMTMalloc(size_t size);
@@ -34,7 +36,7 @@ void* customMTRealloc(void* ptr, size_t size);
 
 void heapCreate();
 void heapKill();
-
+*/
 /*=============================================================================
 * defines
 =============================================================================*/
@@ -45,7 +47,7 @@ void heapKill();
 
 using namespace std;
 void print_blockList();
-inline void mutex_init(pthread_mutex_t* lock) {
+/*inline void mutex_init(pthread_mutex_t* lock) {
     if (pthread_mutex_init(lock, NULL) != 0) {
         cerr << "<mutex error>: mutex init failed" << endl;
         heapKill();
@@ -128,7 +130,7 @@ public:
         mutex_unlock(&w_lock);
     }
 };
-
+*/
 /*=============================================================================
 * Block
 =============================================================================*/
@@ -139,19 +141,75 @@ typedef struct Block
     bool free;
     void* memory; // Pointer to the allocated memory
     struct Block* next;
+    struct Block* previous;
 
     void print() {
-        cout << "size=" << size << ", free=" << free << ", memory=" << memory << ", next=" << next << endl;
+        cout << "size=" << size << ", free=" << free << ", memory=" << memory << ", next=" << next << ", previous=" << previous << endl;
     }
 } Block_t;
 
-typedef struct Slice {
+template <class T>
+class LinkedList {
+public:
+    T* head;
+    T* tail;
+
+
+    LinkedList() : head(nullptr), tail(nullptr) {}
+
+    void add(T* new_block) {
+        if (!head) {
+            head = new_block;
+            tail = new_block;
+        } else {
+            tail->next = new_block;
+            new_block->previous = tail;
+            tail = new_block;
+        }
+    }
+
+    void remove(T* block) {
+        if (head == block) {
+            head = block->next;
+            if (head) {
+                head->previous = nullptr;
+            } else {
+                tail = nullptr;
+            }
+            return;
+        }
+
+        block->previous->next = block->next;
+
+        if (block->next) {
+            block->next->previous = block->previous;
+        } else {
+            tail = block->previous;
+        }
+    }
+
+    T* find(size_t size) {
+        T* current = head;
+        while (current) {
+            if (current->free && current->size >= size) {
+                return current;
+            }
+            current = current->next;
+        }
+        return nullptr;
+    }
+};
+
+typedef LinkedList<Block_t> BlockList_t;
+
+/*typedef struct Slice {
     size_t free_space;
     pthread_mutex_t lock;
-    Block_t* block_list;
+    BlockList_t block_list;
     struct Slice* next;
+    struct Slice* previous;
 
-    Slice() : free_space(SLICE_SIZE), block_list(nullptr), next(nullptr) {
+    Slice() : free_space(SLICE_SIZE), next(nullptr) {
         mutex_init(&lock);
         Block_t* new_block = (Block_t*)sbrk(sizeof(Block_t));
         new_block->size = SLICE_SIZE;
@@ -163,12 +221,13 @@ typedef struct Slice {
             exit(1);
         }
         new_block->next = nullptr;
-        block_list = new_block;
+        new_block->previous = nullptr;
+        block_list.add(new_block);
     }
 
     ~Slice() {
         mutex_destroy(&lock);
-        Block_t* current = block_list;
+        Block_t* current = block_list.head;
         while (current) {
             Block_t* next = current->next;
             sbrk(-(current->size + sizeof(Block_t)));
@@ -176,15 +235,12 @@ typedef struct Slice {
         }
     }
 } Slice_t;
-
-extern Block_t* blockList;
-extern Block_t* lastBlock;
-extern Slice_t* heap;
+*/
+extern BlockList_t blockList;
+/*extern LinkedList<Slice_t> heap;
 extern size_t num_slices;
-
-void addBlock(Block_t** list, Block_t* new_block);
-void removeBlock(Block_t** list, Block_t* block);
-Block_t* findFreeBlock(Block_t* list, size_t size);
+*/
+Block_t* findFreeBlock(BlockList_t& list, size_t size);
 Block_t* allocateBlock(size_t size);
 
 #endif // CUSTOM_ALLOCATOR_

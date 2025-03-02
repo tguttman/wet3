@@ -12,14 +12,13 @@
 
 using namespace std;
 
-Block_t* blockList = nullptr;
-Block_t* lastBlock = nullptr;
-Slice_t* heap = nullptr;
+BlockList_t blockList;
+/*LinkedList<Slice_t> heap;
 ReadersWritersLock heap_lock;
 size_t num_slices = 0;
-
+*/
 void print_blockList() {
-    Block_t* current = blockList;
+    Block_t* current = blockList.head;
     cout << "-------blockList status:--------" << endl;
     int i = 1;
     while (current) {
@@ -30,52 +29,47 @@ void print_blockList() {
     }
 }
 
-void addBlock(Block_t** list, Block_t* new_block) {
-    new_block->next = *list;
-    *list = new_block;
-    if (!new_block->next) 
-        lastBlock = new_block;
-    
-}
-
-void removeBlock(Block_t** list, Block_t* block) {
-    Block_t** current = list;
-    while (*current && *current != block) {
-        current = &(*current)->next;
-    }
-    if (*current) {
-        *current = block->next;
-        if (!block->next) {
-            blockList = (current == list) ? nullptr : *current;
+void splitBlock(Block_t* block, size_t size) {
+    if (block->size > size + sizeof(Block_t)) {
+        Block_t* remaining_block = (Block_t*)((char*)block->memory + size);
+        remaining_block->size = block->size - size - sizeof(Block_t);
+        remaining_block->free = true;
+        remaining_block->memory = (char*)remaining_block + sizeof(Block_t);
+        remaining_block->next = block->next;
+        remaining_block->previous = block;
+        block->size = size;
+        block->next = remaining_block;
+        if (remaining_block->next) {
+            remaining_block->next->previous = remaining_block;
+        } else {
+            blockList.tail = remaining_block;
         }
     }
+    block->free = false;
 }
 
-Block_t* findFreeBlock(Block_t* list, size_t size) {
-    while (list) {
-        if (list->free && list->size >= size) {
-            return list;
+Block_t* findFreeBlock(BlockList_t& list, size_t size) {
+    Block_t* current = list.head;
+    while (current) {
+        if (current->free && current->size >= size) {
+            return current;
         }
-        list = list->next;
+        current = current->next;
     }
     return nullptr;
 }
 
 Block_t* allocateBlock(size_t size) {
-    Block_t* new_block = (Block_t*)sbrk(sizeof(Block_t));
+    Block_t* new_block = (Block_t*)sbrk(sizeof(Block_t) + size);
     if (new_block == (Block_t*)-1) {
         cerr << "<sbrk/brk error>: out of memory" << endl;
         return nullptr;
     }
     new_block->size = size;
     new_block->free = false;
-    new_block->memory = sbrk(size);
-    if (new_block->memory == (void*)-1) {
-        sbrk(-sizeof(Block_t));
-        cerr << "<sbrk/brk error>: out of memory" << endl;
-        return nullptr;
-    }
+    new_block->memory = (char*)new_block + sizeof(Block_t);
     new_block->next = nullptr;
+    new_block->previous = nullptr;
     return new_block;
 }
 
@@ -90,13 +84,12 @@ void* customMalloc(size_t size) {
     size = ALIGN_TO_MULT_OF_4(size);
     Block_t* new_block;
 
-    if (!blockList) { // In case it's the first allocation
+    if (!blockList.head) { // In case it's the first allocation
         new_block = allocateBlock(size);
         if (!new_block) {
             return nullptr;
         }
-        blockList = new_block;
-        lastBlock = new_block;
+        blockList.add(new_block);
     } else { // If it's not the first allocation
         new_block = findFreeBlock(blockList, size);
         if (!new_block) { // If the list is full, get more memory
@@ -104,95 +97,17 @@ void* customMalloc(size_t size) {
             if (!new_block) {
                 return nullptr;
             }
-            addBlock(&blockList, new_block);
+            blockList.add(new_block);
         } else { // If an empty block was found in the blockList
-            if (new_block->size > size) {
-                Block_t* remaining_block = (Block_t*)sbrk(sizeof(Block_t));
-                if (remaining_block == (Block_t*)-1) {
-                    cerr << "<sbrk/brk error>: out of memory" << endl;
-                    return nullptr;
-                }
-                remaining_block->size = new_block->size - size;
-                remaining_block->free = true;
-                remaining_block->memory = (char*)new_block->memory + size;
-                remaining_block->next = new_block->next;
-                new_block->size = size;
-                new_block->next = remaining_block;
-                if (!remaining_block->next) {
-                    lastBlock = remaining_block;
-                }
-            }
-            new_block->free = false;
+            splitBlock(new_block, size);
         }
     }
     return new_block->memory; // Pointer to the allocated memory
 }
 
-// Thread-safe heap allocation in a circular manner
-void* customMTMalloc(size_t size) {
-    if(size <= 0){
-        cerr << "<malloc error>: passed nonpositive size" << endl;
-        return nullptr;
-    }
-
-    size = ALIGN_TO_MULT_OF_4(size);
-    Block_t *new_block;
-
-    heap_lock.read_lock();
-    static Slice_t* current_slice = heap;
-    for (size_t i = 0; i < num_slices; ++i) {
-        if (mutex_trylock(&current_slice->lock) == 0) {
-            new_block = findFreeBlock(current_slice->block_list, size);
-            if (new_block) {
-                if (new_block->size > size) {
-                    Block_t* remaining_block = (Block_t*)sbrk(sizeof(Block_t));
-                    if (remaining_block == (Block_t*)-1) {
-                        cerr << "<sbrk/brk error>: out of memory" << endl;
-                        return nullptr;
-                    }
-                    remaining_block->size = new_block->size - size;
-                    remaining_block->free = true;
-                    remaining_block->memory = (char*)new_block->memory + size;
-                    remaining_block->next = new_block->next;
-                    new_block->size = size;
-                    new_block->next = remaining_block;
-                    if (!remaining_block->next) {
-                        lastBlock = remaining_block;
-                    }
-                }
-                new_block->free = false;
-                mutex_unlock(&current_slice->lock);
-                heap_lock.read_unlock();
-                return new_block->memory;
-            }
-            mutex_unlock(&current_slice->lock);
-        }
-        current_slice = current_slice->next ? current_slice->next : heap;
-    }
-    heap_lock.read_unlock();
-
-    heap_lock.write_lock();
-    Slice_t* new_slice = (Slice_t*)sbrk(sizeof(Slice_t));
-    if (new_slice == (Slice_t*)-1) {
-        cerr << "<sbrk/brk error>: out of memory" << endl;
-        heap_lock.write_unlock();
-        return nullptr;
-    }
-    *new_slice = Slice_t();
-    new_slice->next = heap;
-    heap = new_slice;
-    num_slices++;
-    mutex_lock(&new_slice->lock);
-    heap_lock.write_unlock();
-
-    new_block = new_slice->block_list;
-    new_block->free = false;
-    mutex_unlock(&new_slice->lock);
-    return new_block->memory;
-}
-
+// Returns the block that contains the memory
 Block_t *findBlock(void *ptr) {
-    Block_t* current = blockList;
+    Block_t* current = blockList.head;
     while (current) {
         if (current->memory == ptr) {
             return current;
@@ -208,40 +123,33 @@ void customFree(void* ptr) {
         cerr << "<free error>: passed null pointer" << endl;
         return;
     }
-    if (!blockList) {
+    if (!blockList.head) {
         return;
     }
     // Pointer to the information block
     auto* blockToFree = findBlock(ptr);
-    if (!blockToFree) 
+    if (!blockToFree || blockToFree->free) 
         return;
     
     blockToFree->free = true;
 
     // Merge adjacent free blocks
-    Block_t* current = blockList;
-    while (current) {
-        if (current->free && current->next && current->next->free) {
+    Block_t* current = blockList.head;
+    while (current != blockList.tail) {
+        if (current->free && current->next->free) {
             current->size += current->next->size + sizeof(Block_t);
-            current->next = current->next->next;
-            if (!current->next)
-                lastBlock = current;
+            blockList.remove(current->next);
         } else {
             current = current->next;
         }
     }
     // Reduce program break if possible
-    if (blockList && blockList->free) {
-        bool last = !blockList->next;
-        if (sbrk(-(blockList->size + sizeof(Block_t))) == (void*)-1) {
+    if (blockList.tail->free) {
+        size_t size = blockList.tail->size + sizeof(Block_t);
+        blockList.remove(blockList.tail);
+        if (sbrk(-size) == (void*)-1) {
             cerr << "<sbrk/brk error>: unable to reduce program break" << endl;
             exit(1);
-        }
-        if (last) {
-            blockList = nullptr;
-            lastBlock = nullptr;
-        } else {
-            removeBlock(&blockList, blockList);
         }
     }
 }
@@ -290,13 +198,50 @@ void* customRealloc(void* ptr, size_t size) {
     memcpy(new_block->memory, ptr, min_size);
 
     customFree(ptr);    // Freeing ptr so customMalloc will see it as empty memory
-    /*void *new_ptr = customMalloc(size);
-    if (!new_ptr) {
+    return temp;
+}
+/*
+// Thread-safe heap allocation in a circular manner
+void* customMTMalloc(size_t size) {
+    if(size <= 0){
+        cerr << "<malloc error>: passed nonpositive size" << endl;
         return nullptr;
     }
-    memcpy(new_ptr, temp, size);
-    customFree(temp);*/
-    return temp;
+
+    size = ALIGN_TO_MULT_OF_4(size);
+    Block_t *new_block;
+    static Slice_t* current_slice = heap.head;
+    heap_lock.read_lock();
+    Slice_t* slice = current_slice;
+    current_slice = current_slice->next ? current_slice->next : heap.head;
+    heap_lock.read_unlock();
+    mutex_lock(&slice->lock);
+
+    new_block = findFreeBlock(slice->block_list, size);
+    if (new_block) {
+        splitBlock(new_block, size);
+        mutex_unlock(&slice->lock);
+        return new_block->memory;
+    }
+    mutex_unlock(&slice->lock);
+
+    heap_lock.write_lock();
+    Slice_t* new_slice = (Slice_t*)sbrk(sizeof(Slice_t));
+    if (new_slice == (Slice_t*)-1) {
+        cerr << "<sbrk/brk error>: out of memory" << endl;
+        heap_lock.write_unlock();
+        return nullptr;
+    }
+    *new_slice = Slice_t();
+    heap.add(new_slice);
+    num_slices++;
+    mutex_lock(&new_slice->lock);
+    heap_lock.write_unlock();
+
+    new_block = new_slice->block_list.head;
+    new_block->free = false;
+    mutex_unlock(&new_slice->lock);
+    return new_block->memory;
 }
 
 void heapCreate() {
@@ -308,16 +253,15 @@ void heapCreate() {
             exit(1);
         }
         *new_slice = Slice_t();
-        new_slice->next = heap;
-        heap = new_slice;
+        heap.add(new_slice);
         num_slices++;
     }
 }
 
 void heapKill() {
-    Slice_t* current_slice = heap;
+    Slice_t* current_slice = heap.head;
     while (current_slice) {
-        Block_t* current_block = current_slice->block_list;
+        Block_t* current_block = current_slice->block_list.head;
         while (current_block) {
             Block_t* next_block = current_block->next;
             sbrk(-(current_block->size + sizeof(Block_t)));
@@ -328,4 +272,4 @@ void heapKill() {
         current_slice = next_slice;
         num_slices--;
     }
-}
+}*/
